@@ -41,7 +41,9 @@ class P2P:
             eai = np.array(eai_df[0].values)
             load_df = load_df.apply(pd.to_numeric, errors='coerce')
             pv_df = pv_df.apply(pd.to_numeric, errors='coerce')
-
+            range_df=pd.read_excel('biddingrange.xlsx', header=None)
+            pri_low= range_df.iloc[:, 0].to_numpy()
+            pri_high= range_df.iloc[:, 1].to_numpy()
             # 初始化存储负荷和光伏数据的列表
             load_list = []
             pv_list = []
@@ -72,7 +74,7 @@ class P2P:
             load_results = []
             acload_results=[]
             DG_results = []
-            bidcoefficient=[]
+
             # 处理每个智能体的动作
             for i, action in enumerate(actions):
                 BTA = action[0]  # 获取第i个智能体的BTA
@@ -91,7 +93,7 @@ class P2P:
 
                 # 更新该智能体的SOC（实际改变状态）
                 self.SOCs[i] = updated_SOC
-                bidding_price = price_fit[self.t] + pri * (price_buy - price_fit[self.t])
+                bidding_price = price_fit[self.t]*pri_low[i] + pri * (price_buy*pri_high[i] - price_fit[self.t]*pri_low[i])
 
             # 遍历所有智能体并计算对应的负载
             for i in range(num_agents):
@@ -187,12 +189,12 @@ class P2P:
             obs_list = []
             for i in range(num_agents):
                 obs[i] = np.concatenate([
-                    np.array([load_array[i][self.t]]) / 100,  # 负载数据，转换为一维数组
-                    np.array([pv_array[i][self.t]]) / 100,  # 光伏数据，转换为一维数组
-                    np.array([self.SOCs[i]]) / 100,  # SOC数据，转换为一维数组
-                    np.array([grid[i, 0]]) / 100,  # 电网数据，转换为一维数组
-                    np.array([price_fit[self.t]]),  # 当前价格，已经是数组形式
-                    np.array([pri_ToU[self.t]])  # 时段电价，已经是数组形式
+                    np.array([load_array[i][self.t]]) / 100,
+                    np.array([pv_array[i][self.t]]) / 100,
+                    np.array([self.SOCs[i]]) / 100,
+                    np.array([grid[i, 0]]) / 100,
+                    np.array([price_fit[self.t]]),
+                    np.array([pri_ToU[self.t]])
                 ])
                 obs_list.append(obs[i])
 
@@ -217,7 +219,7 @@ class P2P:
 
             cost = np.zeros(num_agents)
             for i in range(num_agents):
-                cost[i] =  price_fit[self.t] * min(grid[i,0], 0) + price_buy * max(grid[i,0], 0) + 0.05*abs(load_array[i][self.t]) + 0.003*abs(load_array[i][self.t])**2 +  carboncost[i]
+                cost[i] =  price_fit[self.t] * min(grid[i,0], 0) + price_buy * max(grid[i,0], 0) + 0.05*abs(load_results[i]) + 0.003*abs(load_results[i])**2 + 0.2* carboncost[i] + 0.04*DG_results[i]+ 0.005*DG_results[i]**2
 
             indi_cost =np.zeros((num_agents,1))
             for i in range(num_agents):
@@ -232,5 +234,9 @@ class P2P:
                 isdone = False
 
             return obs_array,obs_array.reshape(1, -1),np.full(num_agents, RewardA),np.full(num_agents, isdone),{},0, record_buyer, record_seller,P_da,indi_cost
+
+
+
+
 
 
